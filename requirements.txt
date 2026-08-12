@@ -1,0 +1,11 @@
+flask
+instagrapi==2.18.12
+gdown==5.2.1
+google-genai>=2.0.0
+numpy>=1.25.0
+imageio>=2.30.0
+imageio_ffmpeg>=0.4.0
+decorator>=5.0.0
+proglog>=0.1.10
+python-dotenv>=0.20.0
+gunicorn
