@@ -9,3 +9,4 @@ imageio_ffmpeg>=0.4.0
 decorator>=5.0.0
 proglog>=0.1.10
 python-dotenv>=0.20.0
+decorator<5.0.0,>=4.0.2
