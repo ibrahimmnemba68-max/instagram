@@ -1,6 +1,5 @@
 import os
 import json
-from pathlib import Path
 
 import gdown
 from flask import Flask, jsonify
@@ -22,11 +21,17 @@ app = Flask(__name__)
 
 USERNAME = "fluentdome"
 
-# Instagram music track ID.
-# Add this in Render Environment Variables.
-INSTAGRAM_TRACK_ID = os.environ.get("INSTAGRAM_TRACK_ID")
+# Your Google Drive brain folder
+BRAIN_FOLDER_URL = (
+    "https://drive.google.com/drive/folders/"
+    "1xdraEwHizlHyZggtbl3o2zrpybzz8wUS?usp=sharing"
+)
 
-# Name is only used for logging.
+# Instagram music track ID
+INSTAGRAM_TRACK_ID = os.environ.get(
+    "INSTAGRAM_TRACK_ID"
+)
+
 TARGET_SONG_NAME = "Lofi Rain Instrumental"
 
 
@@ -34,16 +39,12 @@ TARGET_SONG_NAME = "Lofi Rain Instrumental"
 # ENVIRONMENT VARIABLES
 # ============================================================
 
-SESSION_ID = os.environ.get("INSTAGRAM_SESSION_ID")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+SESSION_ID = os.environ.get(
+    "INSTAGRAM_SESSION_ID"
+)
 
-
-# Google Drive folder URL
-# IMPORTANT:
-# Replace this with your real Google Drive folder URL.
-BRAIN_FOLDER_URL = os.environ.get(
-    "BRAIN_FOLDER_URL",
-    "https://google.com"
+GEMINI_API_KEY = os.environ.get(
+    "GEMINI_API_KEY"
 )
 
 
@@ -51,7 +52,9 @@ BRAIN_FOLDER_URL = os.environ.get(
 # DIRECTORIES
 # ============================================================
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(
+    os.path.abspath(__file__)
+)
 
 DOWNLOAD_DIR = os.path.join(
     BASE_DIR,
@@ -79,16 +82,20 @@ TRACKING_FILE = os.path.join(
 # ============================================================
 
 DEFAULT_CAPTION = (
-    "Automated post from my synchronized project brain database! "
+    "Automated post from my synchronized "
+    "project brain database! "
     "🧠🤖 #fluentdome"
 )
 
 
 # ============================================================
-# CREATE REQUIRED DIRECTORIES
+# CREATE DIRECTORIES
 # ============================================================
 
-os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+os.makedirs(
+    DOWNLOAD_DIR,
+    exist_ok=True
+)
 
 
 # ============================================================
@@ -99,28 +106,37 @@ ai_client = None
 
 if GEMINI_API_KEY:
     try:
+
         ai_client = genai.Client(
             api_key=GEMINI_API_KEY
         )
-        print("✅ Gemini client initialized.")
+
+        print(
+            "✅ Gemini client initialized."
+        )
+
     except Exception as e:
-        print(f"⚠️ Gemini initialization failed: {e}")
+
+        print(
+            f"⚠️ Gemini initialization failed: {e}"
+        )
+
         ai_client = None
 
 
 # ============================================================
-# HISTORY FUNCTIONS
+# HISTORY
 # ============================================================
 
 def load_history():
-    """
-    Load list of previously posted images.
-    """
 
-    if not os.path.exists(TRACKING_FILE):
+    if not os.path.exists(
+        TRACKING_FILE
+    ):
         return []
 
     try:
+
         with open(
             TRACKING_FILE,
             "r",
@@ -139,9 +155,6 @@ def load_history():
 
 
 def save_history(history):
-    """
-    Save posted image history.
-    """
 
     try:
 
@@ -169,29 +182,62 @@ def save_history(history):
 # ============================================================
 
 def sync_google_drive():
-    """
-    Download the Google Drive folder into drive_sync.
-    """
 
     print(
-        "📥 Commencing recursive database download from Google Drive..."
+        "📥 Commencing recursive database "
+        "download from Google Drive..."
     )
 
-    if not BRAIN_FOLDER_URL:
-        print("⚠️ BRAIN_FOLDER_URL is missing.")
-        return False
+    print(
+        f"📁 Drive folder: {BRAIN_FOLDER_URL}"
+    )
 
     try:
 
-        gdown.download_folder(
+        # Make sure old download directory exists
+        os.makedirs(
+            DOWNLOAD_DIR,
+            exist_ok=True
+        )
+
+        downloaded = gdown.download_folder(
             url=BRAIN_FOLDER_URL,
             output=DOWNLOAD_DIR,
-            quiet=True,
+            quiet=False,
             remaining_ok=True
         )
 
+        # gdown may return None/empty when nothing was downloaded
+        if not downloaded:
+
+            print(
+                "⚠️ Google Drive returned no downloaded files."
+            )
+
+            return False
+
         print(
             "✅ Google Drive asset sync completed."
+        )
+
+        # Check for Instagram folder
+        if not os.path.isdir(
+            INSTAGRAM_IMAGE_DIR
+        ):
+
+            print(
+                "❌ Instagram folder was not found."
+            )
+
+            print(
+                f"Expected folder: {INSTAGRAM_IMAGE_DIR}"
+            )
+
+            return False
+
+        print(
+            f"✅ Instagram folder found: "
+            f"{INSTAGRAM_IMAGE_DIR}"
         )
 
         return True
@@ -199,7 +245,7 @@ def sync_google_drive():
     except Exception as e:
 
         print(
-            f"⚠️ Drive sync encountered warnings: {e}"
+            f"❌ Drive sync failed: {e}"
         )
 
         return False
@@ -210,28 +256,35 @@ def sync_google_drive():
 # ============================================================
 
 def compile_knowledge_base():
-    """
-    Scan downloaded TXT and Markdown files and combine
-    them into one context for Gemini.
-    """
 
     context_data = ""
 
-    if not os.path.exists(DOWNLOAD_DIR):
+    if not os.path.exists(
+        DOWNLOAD_DIR
+    ):
         return context_data
 
     for root, dirs, files in os.walk(
         DOWNLOAD_DIR
     ):
 
-        # Ignore Instagram media directory
-        if "Instagram" in root:
+        # Don't read Instagram images as knowledge
+        if os.path.abspath(
+            root
+        ).startswith(
+            os.path.abspath(
+                INSTAGRAM_IMAGE_DIR
+            )
+        ):
             continue
 
         for file in files:
 
             if not file.lower().endswith(
-                (".txt", ".md")
+                (
+                    ".txt",
+                    ".md"
+                )
             ):
                 continue
 
@@ -261,25 +314,24 @@ def compile_knowledge_base():
                     f"⚠️ Could not read {file}: {e}"
                 )
 
-                continue
-
     return context_data
 
 
 # ============================================================
-# CREATE REEL VIDEO
+# CREATE REEL
 # ============================================================
 
 def create_reel_video(target_images):
-    """
-    Create a simple slideshow/reel from three images.
-    Each image remains on screen for 3 seconds.
-    """
 
     print(
-        f"🎬 Creating video from: "
-        f"{[os.path.basename(x) for x in target_images]}"
+        "🎬 Creating video from:"
     )
+
+    for image in target_images:
+
+        print(
+            f"   - {os.path.basename(image)}"
+        )
 
     clips = []
 
@@ -288,11 +340,15 @@ def create_reel_video(target_images):
         for image_path in target_images:
 
             clip = (
-                ImageClip(image_path)
+                ImageClip(
+                    image_path
+                )
                 .with_duration(3)
             )
 
-            clips.append(clip)
+            clips.append(
+                clip
+            )
 
         video = concatenate_videoclips(
             clips,
@@ -310,6 +366,7 @@ def create_reel_video(target_images):
         video.close()
 
         for clip in clips:
+
             clip.close()
 
         print(
@@ -328,16 +385,10 @@ def create_reel_video(target_images):
 
 
 # ============================================================
-# GET INSTAGRAM MUSIC TRACK
+# GET INSTAGRAM MUSIC
 # ============================================================
 
 def get_music_track(cl):
-    """
-    Get Instagram music track using INSTAGRAM_TRACK_ID.
-
-    If no track ID is configured, return None and allow
-    the Reel to upload without music.
-    """
 
     if not INSTAGRAM_TRACK_ID:
 
@@ -346,7 +397,7 @@ def get_music_track(cl):
         )
 
         print(
-            "ℹ️ Reel will be uploaded without Instagram music."
+            "ℹ️ Reel will be uploaded without music."
         )
 
         return None
@@ -363,7 +414,7 @@ def get_music_track(cl):
         )
 
         print(
-            f"✅ Track loaded: {track}"
+            "✅ Instagram music track loaded."
         )
 
         return track
@@ -371,31 +422,29 @@ def get_music_track(cl):
     except Exception as e:
 
         print(
-            f"⚠️ Could not load Instagram music track: {e}"
+            f"⚠️ Could not load Instagram music: {e}"
         )
 
         return None
 
 
 # ============================================================
-# POST REEL
+# UPLOAD REEL
 # ============================================================
 
 def upload_reel(cl):
-    """
-    Upload generated Reel.
 
-    If INSTAGRAM_TRACK_ID exists, attempt to upload
-    using Instagram music metadata.
-    """
-
-    if not os.path.exists(OUTPUT_VIDEO):
+    if not os.path.exists(
+        OUTPUT_VIDEO
+    ):
 
         return (
             "Error: Generated video does not exist."
         )
 
-    track = get_music_track(cl)
+    track = get_music_track(
+        cl
+    )
 
     try:
 
@@ -403,15 +452,12 @@ def upload_reel(cl):
             "🚀 Uploading Reel..."
         )
 
-        # ----------------------------------------------------
-        # Upload WITH Instagram music
-        # ----------------------------------------------------
-
+        # Try music first
         if track:
 
             try:
 
-                media = cl.clip_upload_with_music(
+                cl.clip_upload_with_music(
                     path=OUTPUT_VIDEO,
                     caption=DEFAULT_CAPTION,
                     track=track
@@ -429,18 +475,16 @@ def upload_reel(cl):
             except Exception as music_error:
 
                 print(
-                    f"⚠️ Music upload failed: {music_error}"
+                    f"⚠️ Music upload failed: "
+                    f"{music_error}"
                 )
 
                 print(
                     "🔄 Trying normal Reel upload..."
                 )
 
-        # ----------------------------------------------------
-        # Fallback: normal Reel upload
-        # ----------------------------------------------------
-
-        media = cl.clip_upload(
+        # Normal Reel upload
+        cl.clip_upload(
             path=OUTPUT_VIDEO,
             caption=DEFAULT_CAPTION
         )
@@ -466,14 +510,10 @@ def upload_reel(cl):
 
 
 # ============================================================
-# PROCESS IMAGES AND POST
+# PROCESS IMAGES
 # ============================================================
 
 def process_and_post_slideshow(cl):
-    """
-    Select three images, create Reel, upload it,
-    then save the images to posting history.
-    """
 
     history = load_history()
 
@@ -483,24 +523,16 @@ def process_and_post_slideshow(cl):
         ".png"
     )
 
-    # --------------------------------------------------------
     # Check Instagram folder
-    # --------------------------------------------------------
-
-    if not os.path.exists(
+    if not os.path.isdir(
         INSTAGRAM_IMAGE_DIR
     ):
 
         return (
-            "Error: Sync completed but "
-            "'Instagram' media queue subfolder "
-            "was not found."
+            "Error: Instagram folder was not found."
         )
 
-    # --------------------------------------------------------
     # Find images
-    # --------------------------------------------------------
-
     all_images = [
         os.path.join(
             INSTAGRAM_IMAGE_DIR,
@@ -529,20 +561,14 @@ def process_and_post_slideshow(cl):
         f"📸 Found {len(all_images)} images."
     )
 
-    # --------------------------------------------------------
-    # Find images not posted before
-    # --------------------------------------------------------
-
+    # Images not posted before
     unposted_images = [
         image
         for image in all_images
         if image not in history
     ]
 
-    # --------------------------------------------------------
-    # Reset history when all images were used
-    # --------------------------------------------------------
-
+    # Reset when fewer than 3 remain
     if len(unposted_images) < 3:
 
         print(
@@ -557,10 +583,6 @@ def process_and_post_slideshow(cl):
 
         unposted_images = all_images
 
-    # --------------------------------------------------------
-    # Need at least 3 images
-    # --------------------------------------------------------
-
     if len(unposted_images) < 3:
 
         return (
@@ -568,10 +590,7 @@ def process_and_post_slideshow(cl):
             "to create a Reel."
         )
 
-    # --------------------------------------------------------
     # Select first 3
-    # --------------------------------------------------------
-
     target_images = unposted_images[:3]
 
     print(
@@ -579,14 +598,12 @@ def process_and_post_slideshow(cl):
     )
 
     for image in target_images:
+
         print(
             f"   - {os.path.basename(image)}"
         )
 
-    # --------------------------------------------------------
     # Create video
-    # --------------------------------------------------------
-
     video_created = create_reel_video(
         target_images
     )
@@ -597,18 +614,12 @@ def process_and_post_slideshow(cl):
             "Error: Could not create Reel video."
         )
 
-    # --------------------------------------------------------
-    # Upload Reel
-    # --------------------------------------------------------
-
+    # Upload
     upload_result = upload_reel(
         cl
     )
 
-    # --------------------------------------------------------
-    # Only save history if upload succeeded
-    # --------------------------------------------------------
-
+    # Save history only after success
     if upload_result.startswith(
         "Success:"
     ):
@@ -616,7 +627,10 @@ def process_and_post_slideshow(cl):
         for image in target_images:
 
             if image not in history:
-                history.append(image)
+
+                history.append(
+                    image
+                )
 
         save_history(
             history
@@ -630,14 +644,10 @@ def process_and_post_slideshow(cl):
 
 
 # ============================================================
-# MONITOR AND REPLY TO COMMENTS
+# MONITOR COMMENTS
 # ============================================================
 
 def monitor_and_reply_to_comments(cl):
-    """
-    Check recent Instagram posts for comments and use
-    Gemini to generate replies from the knowledge base.
-    """
 
     if not ai_client:
 
@@ -652,26 +662,14 @@ def monitor_and_reply_to_comments(cl):
 
     try:
 
-        # ----------------------------------------------------
-        # Get user ID
-        # ----------------------------------------------------
-
         user_id = cl.user_id_from_username(
             USERNAME
         )
-
-        # ----------------------------------------------------
-        # Get latest posts
-        # ----------------------------------------------------
 
         user_medias = cl.user_medias(
             user_id,
             amount=3
         )
-
-        # ----------------------------------------------------
-        # Load knowledge
-        # ----------------------------------------------------
 
         knowledge_context = (
             compile_knowledge_base()
@@ -684,10 +682,6 @@ def monitor_and_reply_to_comments(cl):
                 "are available. Reply politely as a "
                 "helpful AI assistant."
             )
-
-        # ----------------------------------------------------
-        # Process each post
-        # ----------------------------------------------------
 
         for media in user_medias:
 
@@ -707,13 +701,8 @@ def monitor_and_reply_to_comments(cl):
 
                 continue
 
-            # ------------------------------------------------
-            # Process comments
-            # ------------------------------------------------
-
             for comment in comments:
 
-                # Ignore own comments
                 if (
                     comment.user.username
                     == USERNAME
@@ -728,21 +717,16 @@ def monitor_and_reply_to_comments(cl):
                         f"{comment.text}"
                     )
 
-                    # ----------------------------------------
-                    # Gemini prompt
-                    # ----------------------------------------
-
                     ai_prompt = f"""
 You are the AI operations representative
 for the platform '{USERNAME}'.
 
-Below is the knowledge database derived
-from our project vault files:
+Below is the knowledge database:
 
 {knowledge_context}
 
 A user @{comment.user.username}
-left this comment on our Instagram post:
+left this comment:
 
 "{comment.text}"
 
@@ -756,10 +740,6 @@ Do not sound robotic.
 
 Maximum 2 short sentences.
 """
-
-                    # ----------------------------------------
-                    # Generate reply
-                    # ----------------------------------------
 
                     response = (
                         ai_client
@@ -776,15 +756,7 @@ Maximum 2 short sentences.
 
                     if not reply_text:
 
-                        print(
-                            "⚠️ Gemini returned empty response."
-                        )
-
                         continue
-
-                    # ----------------------------------------
-                    # Reply to comment
-                    # ----------------------------------------
 
                     cl.comment_create(
                         media.id,
@@ -819,7 +791,7 @@ Maximum 2 short sentences.
 
 
 # ============================================================
-# HOME ROUTE
+# HOME
 # ============================================================
 
 @app.route("/")
@@ -838,7 +810,7 @@ def home():
 
 
 # ============================================================
-# AUTOMATION ROUTE
+# AUTOMATION
 # ============================================================
 
 @app.route(
@@ -847,18 +819,17 @@ def home():
 )
 def trigger_automation():
 
-    # --------------------------------------------------------
-    # Check environment variables
-    # --------------------------------------------------------
-
+    # Check required environment variables
     missing_variables = []
 
     if not SESSION_ID:
+
         missing_variables.append(
             "INSTAGRAM_SESSION_ID"
         )
 
     if not GEMINI_API_KEY:
+
         missing_variables.append(
             "GEMINI_API_KEY"
         )
@@ -882,22 +853,37 @@ def trigger_automation():
         "\n🏁 Autonomous routine initiated..."
     )
 
-    # --------------------------------------------------------
-    # Google Drive synchronization
-    # --------------------------------------------------------
+    # ========================================================
+    # GOOGLE DRIVE
+    # ========================================================
 
-    sync_google_drive()
+    drive_synced = sync_google_drive()
 
-    # --------------------------------------------------------
-    # Instagram client
-    # --------------------------------------------------------
+    if not drive_synced:
+
+        return jsonify(
+            {
+                "status": "Failed",
+
+                "error":
+                    "Google Drive synchronization failed. "
+                    "Check that the Google Drive folder is "
+                    "shared as 'Anyone with the link' and "
+                    "contains an 'Instagram' folder."
+            }
+        ), 500
+
+    # ========================================================
+    # INSTAGRAM
+    # ========================================================
 
     cl = Client()
 
     try:
 
         print(
-            "🔐 Logging into Instagram using session ID..."
+            "🔐 Logging into Instagram "
+            "using session ID..."
         )
 
         cl.login_by_sessionid(
@@ -923,9 +909,9 @@ def trigger_automation():
             }
         ), 500
 
-    # --------------------------------------------------------
-    # Post Reel
-    # --------------------------------------------------------
+    # ========================================================
+    # POST REEL
+    # ========================================================
 
     posting_log = (
         process_and_post_slideshow(
@@ -933,9 +919,9 @@ def trigger_automation():
         )
     )
 
-    # --------------------------------------------------------
-    # Process comments
-    # --------------------------------------------------------
+    # ========================================================
+    # COMMENTS
+    # ========================================================
 
     comment_log = (
         monitor_and_reply_to_comments(
@@ -943,9 +929,9 @@ def trigger_automation():
         )
     )
 
-    # --------------------------------------------------------
-    # Final response
-    # --------------------------------------------------------
+    # ========================================================
+    # RESPONSE
+    # ========================================================
 
     return jsonify(
         {
