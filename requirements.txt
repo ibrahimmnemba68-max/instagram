@@ -7,12 +7,10 @@ gdown==5.2.1
 google-genai==2.18.0
 
 numpy>=1.25.0
-Pillow>=12.2.0
+Pillow>=12.2.0,<13
 
 imageio>=2.30.0
 imageio-ffmpeg>=0.4.0
-decorator==5.2.1
+decorator>=5.0.0,<6.0
 proglog>=0.1.10
 python-dotenv>=0.20.0
-
-moviepy==2.2.1
