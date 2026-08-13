@@ -76,10 +76,15 @@ DOWNLOAD_DIR = os.path.join(
     "drive_sync"
 )
 
-INSTAGRAM_IMAGE_DIR = os.path.join(
-    DOWNLOAD_DIR,
-    "Instagram"
-)
+# IMPORTANT:
+# This is discovered automatically after Google Drive sync.
+# We do NOT hard-code:
+# drive_sync/new_brain/new_brain/Instagram/Content_queue
+#
+# This makes the program work even if the folder nesting changes.
+
+INSTAGRAM_IMAGE_DIR = None
+
 
 OUTPUT_VIDEO = os.path.join(
     BASE_DIR,
@@ -235,23 +240,88 @@ def save_history(history):
 
 
 # ============================================================
+# FIND INSTAGRAM CONTENT QUEUE
+# ============================================================
+
+def find_content_queue():
+
+    """
+    Search recursively inside DOWNLOAD_DIR for:
+
+        Instagram/Content_queue
+
+    This handles structures such as:
+
+        drive_sync/Instagram/Content_queue
+
+    or:
+
+        drive_sync/new_brain/Instagram/Content_queue
+
+    or:
+
+        drive_sync/new_brain/new_brain/Instagram/Content_queue
+    """
+
+    if not os.path.isdir(
+        DOWNLOAD_DIR
+    ):
+
+        return None
+
+
+    for root, dirs, files in os.walk(
+        DOWNLOAD_DIR
+    ):
+
+        normalized_root = os.path.normpath(
+            root
+        )
+
+        parts = normalized_root.split(
+            os.sep
+        )
+
+
+        if len(parts) >= 2:
+
+            if (
+                parts[-2].lower()
+                == "instagram"
+                and
+                parts[-1].lower()
+                == "content_queue"
+            ):
+
+                return root
+
+
+    return None
+
+
+# ============================================================
 # GOOGLE DRIVE SYNC
 # ============================================================
 
 def sync_google_drive():
 
+    global INSTAGRAM_IMAGE_DIR
+
+
     print()
+
     print(
         "📥 Starting Google Drive synchronization..."
     )
 
     print(
-        f"📁 Drive folder:"
+        "📁 Drive folder:"
     )
 
     print(
         BRAIN_FOLDER_URL
     )
+
 
     try:
 
@@ -260,8 +330,9 @@ def sync_google_drive():
             exist_ok=True
         )
 
+
         # ----------------------------------------------------
-        # Download the entire public Drive folder
+        # Download entire public Drive folder
         # ----------------------------------------------------
 
         downloaded = gdown.download_folder(
@@ -271,33 +342,55 @@ def sync_google_drive():
             remaining_ok=True
         )
 
+
         print()
 
         print(
             "📦 Google Drive download process finished."
         )
 
+
         # ----------------------------------------------------
-        # Check Instagram folder
+        # Find Content_queue automatically
         # ----------------------------------------------------
 
-        if not os.path.isdir(
-            INSTAGRAM_IMAGE_DIR
-        ):
+        INSTAGRAM_IMAGE_DIR = find_content_queue()
+
+
+        if not INSTAGRAM_IMAGE_DIR:
 
             print(
-                "❌ Instagram folder was not found."
+                "❌ Instagram/Content_queue was not found."
             )
 
-            print(
-                f"Expected:"
-            )
+            print()
 
             print(
-                INSTAGRAM_IMAGE_DIR
+                "🔎 Searching downloaded folders..."
             )
+
+
+            for root, dirs, files in os.walk(
+                DOWNLOAD_DIR
+            ):
+
+                print(
+                    f"   {root}"
+                )
+
 
             return False
+
+
+        print()
+
+        print(
+            "📸 Instagram content queue found:"
+        )
+
+        print(
+            INSTAGRAM_IMAGE_DIR
+        )
 
 
         # ----------------------------------------------------
@@ -311,7 +404,9 @@ def sync_google_drive():
             ".webp"
         )
 
+
         image_count = 0
+
 
         for filename in os.listdir(
             INSTAGRAM_IMAGE_DIR
@@ -324,8 +419,10 @@ def sync_google_drive():
                 image_count += 1
 
 
+        print()
+
         print(
-            f"📸 Instagram folder contains "
+            f"📸 Content queue contains "
             f"{image_count} images."
         )
 
@@ -339,14 +436,19 @@ def sync_google_drive():
             return False
 
 
+        print()
+
         print(
             "✅ Google Drive synchronization successful."
         )
+
 
         return True
 
 
     except Exception as e:
+
+        print()
 
         print(
             "❌ Google Drive synchronization failed:"
@@ -369,6 +471,7 @@ def compile_knowledge_base():
 
     context_data = ""
 
+
     if not os.path.exists(
         DOWNLOAD_DIR
     ):
@@ -381,14 +484,16 @@ def compile_knowledge_base():
     ):
 
         # ----------------------------------------------------
-        # Don't read Instagram images
+        # Skip image directory
         # ----------------------------------------------------
 
-        if os.path.abspath(
-            root
-        ).startswith(
-            os.path.abspath(
-                INSTAGRAM_IMAGE_DIR
+        if (
+            INSTAGRAM_IMAGE_DIR
+            and
+            os.path.abspath(root).startswith(
+                os.path.abspath(
+                    INSTAGRAM_IMAGE_DIR
+                )
             )
         ):
 
@@ -450,6 +555,7 @@ def create_reel_video(
 ):
 
     print()
+
     print(
         "🎬 Creating Instagram Reel..."
     )
@@ -498,7 +604,7 @@ def create_reel_video(
 
 
         # ----------------------------------------------------
-        # Export video
+        # Export
         # ----------------------------------------------------
 
         video.write_videofile(
@@ -510,8 +616,10 @@ def create_reel_video(
         )
 
 
+        print()
+
         print(
-            f"✅ Reel created:"
+            "✅ Reel created:"
         )
 
         print(
@@ -534,10 +642,6 @@ def create_reel_video(
 
 
     finally:
-
-        # ----------------------------------------------------
-        # Cleanup MoviePy resources
-        # ----------------------------------------------------
 
         try:
 
@@ -584,8 +688,10 @@ def get_music_track(
 
     try:
 
+        print()
+
         print(
-            f"🎵 Fetching Instagram track:"
+            "🎵 Fetching Instagram track:"
         )
 
         print(
@@ -640,6 +746,7 @@ def upload_reel(
     try:
 
         print()
+
         print(
             "🚀 Uploading Reel..."
         )
@@ -741,15 +848,24 @@ def process_and_post_slideshow(
 
 
     # ========================================================
-    # CHECK INSTAGRAM FOLDER
+    # CHECK CONTENT QUEUE
     # ========================================================
+
+    if not INSTAGRAM_IMAGE_DIR:
+
+        return (
+            "Error: Instagram Content_queue "
+            "was not found."
+        )
+
 
     if not os.path.isdir(
         INSTAGRAM_IMAGE_DIR
     ):
 
         return (
-            "Error: Instagram folder was not found."
+            "Error: Instagram Content_queue "
+            "directory does not exist."
         )
 
 
@@ -775,6 +891,7 @@ def process_and_post_slideshow(
                 filename
             )
 
+
             if os.path.isfile(
                 full_path
             ):
@@ -783,6 +900,8 @@ def process_and_post_slideshow(
                     full_path
                 )
 
+
+    print()
 
     print(
         f"📸 Found {len(all_images)} images."
@@ -793,7 +912,7 @@ def process_and_post_slideshow(
 
         return (
             "Error: No valid images found inside "
-            "your Instagram folder."
+            "Instagram/Content_queue."
         )
 
 
@@ -844,6 +963,7 @@ def process_and_post_slideshow(
 
 
     print()
+
     print(
         "🎯 Selected images:"
     )
@@ -882,7 +1002,7 @@ def process_and_post_slideshow(
 
 
     # ========================================================
-    # SAVE HISTORY ONLY IF POST SUCCESSFUL
+    # SAVE HISTORY ONLY AFTER SUCCESS
     # ========================================================
 
     if upload_result.startswith(
@@ -953,6 +1073,7 @@ def monitor_and_reply_to_comments(
 
 
     print()
+
     print(
         "💬 Scanning recent Instagram posts..."
     )
@@ -1189,6 +1310,7 @@ def run_automation_background():
 
 
         print()
+
         print(
             "============================================"
         )
@@ -1224,6 +1346,7 @@ def run_automation_background():
 
 
         print()
+
         print(
             "🔐 Logging into Instagram..."
         )
@@ -1290,6 +1413,7 @@ def run_automation_background():
 
 
         print()
+
         print(
             "============================================"
         )
@@ -1306,6 +1430,7 @@ def run_automation_background():
     except Exception as e:
 
         print()
+
         print(
             "❌ AUTOMATION FAILED"
         )
@@ -1330,6 +1455,7 @@ def run_automation_background():
     finally:
 
         automation_running = False
+
 
         try:
 
