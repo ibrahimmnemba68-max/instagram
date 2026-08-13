@@ -4,21 +4,21 @@ import gdown
 from flask import Flask, jsonify
 from instagrapi import Client
 from moviepy import ImageClip, concatenate_videoclips
-
-
 from google import genai
 
 app = Flask(__name__)
 
 # --- SECURE CREDENTIALS (FETCHED FROM RENDER ENV) ---
 USERNAME = "fluentdome"
-INSTAGRAM_TRACK_ID = "1234567890"  # Replace with your desired Instagram Track ID
 
-# Both sensitive tokens are now pulled dynamically from system environments
+# ⚠️ Make sure this is a real, numeric track ID string from Instagram
+TARGET_SONG_NAME = "Lofi Rain Instrumental"   
+
+# Sensitive tokens are pulled dynamically from system environments
 SESSION_ID = os.environ.get("INSTAGRAM_SESSION_ID")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
-# Google Drive folder links derived from user context layout
+# Restored your exact Google Drive brain link
 BRAIN_FOLDER_URL = "https://google.com"
 
 # Folder directory mapping layouts
@@ -33,8 +33,10 @@ DEFAULT_CAPTION = "Automated post from my synchronized project brain database! �
 # Ensure runtime paths exist
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-# Initialize Gemini Client safely using the cloud variable
-ai_client = genai.Client(api_key=GEMINI_API_KEY)
+# Initialize Gemini Client safely using your environment variable
+ai_client = None
+if GEMINI_API_KEY:
+    ai_client = genai.Client(api_key=GEMINI_API_KEY)
 
 # --- SYSTEM UTILITIES ---
 
@@ -100,9 +102,25 @@ def process_and_post_slideshow(cl):
     video = concatenate_videoclips(clips, method="compose")
     video.write_videofile(OUTPUT_VIDEO, fps=24, codec="libx264", logger=None)
 
-    # Resolve track and execute upload payload
-    track_meta = cl.track_info_by_id(INSTAGRAM_TRACK_ID)
-    cl.clip_upload_as_reel_with_music(OUTPUT_VIDEO, caption=DEFAULT_CAPTION, music_track_uri=track_meta.uri)
+    # FIXED: Official instagrapi syntax to lookup music track objects
+    print(f"Fetching official audio track info for ID: {INSTAGRAM_TRACK_ID}...")
+    try:
+        track_info = cl.track_info(INSTAGRAM_TRACK_ID)
+        print(f"Loaded track title: {track_info.title}")
+    except Exception as e:
+        return f"Error: Failed to fetch Instagram track info: {e}"
+
+    # FIXED: Official instagrapi syntax to deploy videos with linked tracks
+    try:
+        print("🚀 Uploading video reel with linked track payload...")
+        media = cl.clip_upload(
+            path=OUTPUT_VIDEO,
+            caption=DEFAULT_CAPTION,
+            track=track_info
+        )
+        print("🎉 SUCCESS! Video posted live.")
+    except Exception as e:
+        return f"Error: Video conversion worked, but upload stream failed: {e}"
 
     # Save to history file logs
     for img in target_images:
@@ -112,6 +130,9 @@ def process_and_post_slideshow(cl):
 
 def monitor_and_reply_to_comments(cl):
     """Fetches new comments on recent posts and uses Gemini to answer them using your notes."""
+    if not ai_client:
+        return "Comment processor skipped: Gemini API Key missing."
+
     print("💬 Scanning recent media timeline for comment notifications...")
     try:
         user_id = cl.user_id_from_username(USERNAME)
