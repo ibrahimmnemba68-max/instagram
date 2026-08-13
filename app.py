@@ -3,7 +3,7 @@ import json
 import gdown
 from flask import Flask, jsonify
 from instagrapi import Client
-from moviepy.editor import ImageClip, concatenate_videoclips
+from moviepy import ImageClip, concatenate_videoclips
 
 from google import genai
 
