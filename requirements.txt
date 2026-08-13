@@ -9,4 +9,4 @@ decorator>=5.0.0
 proglog>=0.1.10
 python-dotenv>=0.20.0
 gunicorn
-moviepy==1.0.3
+moviepy>=2.1.1
