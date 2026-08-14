@@ -2,21 +2,16 @@ import os
 import json
 import threading
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 
 import gdown
-
 from flask import Flask, jsonify
-
 from instagrapi import Client
-
-from moviepy import ImageClip, concatenate_videoclips
-
 from google import genai
 
 
 # ============================================================
-# FLASK APP
+# FLASK
 # ============================================================
 
 app = Flask(__name__)
@@ -28,24 +23,19 @@ app = Flask(__name__)
 
 USERNAME = "fluentdome"
 
-
-# ============================================================
-# GOOGLE DRIVE BRAIN
-# ============================================================
-
 BRAIN_FOLDER_URL = (
     "https://drive.google.com/drive/folders/"
     "1xdraEwHizlHyZggtbl3o2zrpybzz8wUS?usp=sharing"
 )
 
-
-# ============================================================
-# INSTAGRAM MUSIC
-# ============================================================
-
-INSTAGRAM_TRACK_ID = os.environ.get(
-    "INSTAGRAM_TRACK_ID"
-)
+# Instagram Music track ID.
+#
+# IMPORTANT:
+# A normal Instagram image/feed post cannot reliably be given
+# an Instagram Music Library track through instagrapi.
+#
+# We keep this variable ready for the future Reel version.
+INSTAGRAM_TRACK_ID = os.environ.get("INSTAGRAM_TRACK_ID")
 
 TARGET_SONG_NAME = "Lofi Rain Instrumental"
 
@@ -54,43 +44,32 @@ TARGET_SONG_NAME = "Lofi Rain Instrumental"
 # ENVIRONMENT VARIABLES
 # ============================================================
 
-SESSION_ID = os.environ.get(
-    "INSTAGRAM_SESSION_ID"
-)
-
-GEMINI_API_KEY = os.environ.get(
-    "GEMINI_API_KEY"
-)
+SESSION_ID = os.environ.get("INSTAGRAM_SESSION_ID")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 
 # ============================================================
 # DIRECTORIES
 # ============================================================
 
-BASE_DIR = os.path.dirname(
-    os.path.abspath(__file__)
-)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 DOWNLOAD_DIR = os.path.join(
     BASE_DIR,
     "drive_sync"
 )
 
-# IMPORTANT:
-# We DO NOT hard-code Instagram/Content_queue here.
-# The program will search for it recursively after
-# Google Drive synchronization.
-
 INSTAGRAM_IMAGE_DIR = None
-
-OUTPUT_VIDEO = os.path.join(
-    BASE_DIR,
-    "generated_reel.mp4"
-)
 
 TRACKING_FILE = os.path.join(
     BASE_DIR,
     "posted_history.json"
+)
+
+
+os.makedirs(
+    DOWNLOAD_DIR,
+    exist_ok=True
 )
 
 
@@ -126,17 +105,7 @@ DEFAULT_CAPTION = (
 
 
 # ============================================================
-# CREATE DIRECTORIES
-# ============================================================
-
-os.makedirs(
-    DOWNLOAD_DIR,
-    exist_ok=True
-)
-
-
-# ============================================================
-# GEMINI CLIENT
+# GEMINI
 # ============================================================
 
 ai_client = None
@@ -149,23 +118,30 @@ if GEMINI_API_KEY:
             api_key=GEMINI_API_KEY
         )
 
-        print(
-            "✅ Gemini client initialized."
-        )
+        print("✅ Gemini client initialized.")
 
     except Exception as e:
 
         print(
-            f"⚠️ Gemini initialization failed: {e}"
+            f"❌ Gemini initialization failed: {e}"
         )
-
-        ai_client = None
 
 else:
 
     print(
         "⚠️ GEMINI_API_KEY is not configured."
     )
+
+
+# ============================================================
+# TIME
+# ============================================================
+
+def now_iso():
+
+    return datetime.now(
+        timezone.utc
+    ).isoformat()
 
 
 # ============================================================
@@ -236,7 +212,7 @@ def save_history(history):
 
 
 # ============================================================
-# FIND INSTAGRAM CONTENT QUEUE
+# FIND CONTENT QUEUE
 # ============================================================
 
 def find_content_queue():
@@ -272,33 +248,25 @@ def find_content_queue():
             os.sep
         )
 
+        if len(parts) < 2:
 
-        # ----------------------------------------------------
-        # We specifically want:
-        #
-        # .../Instagram/Content_queue
-        # ----------------------------------------------------
-
-        if len(parts) >= 2:
-
-            parent_name = parts[-2].lower()
-
-            current_name = parts[-1].lower()
+            continue
 
 
-            if (
-                parent_name == "instagram"
-                and current_name == "content_queue"
-            ):
+        parent_name = parts[-2].lower()
 
-                possible_matches.append(
-                    root
-                )
+        current_name = parts[-1].lower()
 
 
-    # --------------------------------------------------------
-    # No match
-    # --------------------------------------------------------
+        if (
+            parent_name == "instagram"
+            and current_name == "content_queue"
+        ):
+
+            possible_matches.append(
+                root
+            )
+
 
     if not possible_matches:
 
@@ -308,7 +276,7 @@ def find_content_queue():
 
         print()
         print(
-            "📂 Downloaded directory structure:"
+            "📂 Current downloaded structure:"
         )
 
 
@@ -334,10 +302,6 @@ def find_content_queue():
         return None
 
 
-    # --------------------------------------------------------
-    # Use first match
-    # --------------------------------------------------------
-
     selected = possible_matches[0]
 
 
@@ -346,19 +310,14 @@ def find_content_queue():
     )
 
     print(
-        f"   {selected}"
+        selected
     )
 
 
-    # --------------------------------------------------------
-    # If multiple folders exist, show them
-    # --------------------------------------------------------
-
     if len(possible_matches) > 1:
 
-        print()
         print(
-            "⚠️ Multiple Content_queue folders found:"
+            "⚠️ Multiple Content_queue folders found."
         )
 
         for match in possible_matches:
@@ -366,11 +325,6 @@ def find_content_queue():
             print(
                 f"   - {match}"
             )
-
-        print()
-        print(
-            "Using the first matching folder."
-        )
 
 
     return selected
@@ -387,7 +341,7 @@ def sync_google_drive():
 
     print()
     print(
-        "================================================"
+        "=============================================="
     )
 
     print(
@@ -395,34 +349,17 @@ def sync_google_drive():
     )
 
     print(
-        "================================================"
-    )
-
-    print()
-    print(
-        "📁 Drive folder:"
-    )
-
-    print(
-        BRAIN_FOLDER_URL
+        "=============================================="
     )
 
 
     try:
-
-        # ----------------------------------------------------
-        # Ensure download directory exists
-        # ----------------------------------------------------
 
         os.makedirs(
             DOWNLOAD_DIR,
             exist_ok=True
         )
 
-
-        # ----------------------------------------------------
-        # Download entire Drive folder
-        # ----------------------------------------------------
 
         print()
         print(
@@ -440,13 +377,9 @@ def sync_google_drive():
 
         print()
         print(
-            "📦 Google Drive download process finished."
+            "✅ Google Drive download finished."
         )
 
-
-        # ----------------------------------------------------
-        # Find Content_queue recursively
-        # ----------------------------------------------------
 
         INSTAGRAM_IMAGE_DIR = (
             find_content_queue()
@@ -455,17 +388,8 @@ def sync_google_drive():
 
         if not INSTAGRAM_IMAGE_DIR:
 
-            print()
-            print(
-                "❌ Could not locate Instagram/Content_queue."
-            )
-
             return False
 
-
-        # ----------------------------------------------------
-        # Count images
-        # ----------------------------------------------------
 
         image_extensions = (
             ".jpg",
@@ -491,7 +415,6 @@ def sync_google_drive():
                     filename
                 )
 
-
                 if os.path.isfile(
                     full_path
                 ):
@@ -501,12 +424,9 @@ def sync_google_drive():
                     )
 
 
-        # ----------------------------------------------------
-        # Sort images
-        # ----------------------------------------------------
-
         images.sort(
-            key=lambda x: os.path.basename(x).lower()
+            key=lambda x:
+                os.path.basename(x).lower()
         )
 
 
@@ -517,10 +437,6 @@ def sync_google_drive():
         )
 
 
-        # ----------------------------------------------------
-        # Show images
-        # ----------------------------------------------------
-
         for image in images:
 
             print(
@@ -529,15 +445,10 @@ def sync_google_drive():
             )
 
 
-        # ----------------------------------------------------
-        # Minimum image check
-        # ----------------------------------------------------
+        if not images:
 
-        if len(images) < 3:
-
-            print()
             print(
-                "❌ At least 3 images are required."
+                "❌ No images found."
             )
 
             return False
@@ -546,15 +457,6 @@ def sync_google_drive():
         print()
         print(
             "✅ Google Drive synchronization successful."
-        )
-
-        print()
-        print(
-            "📂 Using image directory:"
-        )
-
-        print(
-            INSTAGRAM_IMAGE_DIR
         )
 
 
@@ -598,18 +500,26 @@ def compile_knowledge_base():
     ):
 
         # ----------------------------------------------------
-        # Do not read image folder
+        # Ignore Instagram image folder
         # ----------------------------------------------------
 
         if INSTAGRAM_IMAGE_DIR:
 
             try:
 
-                if os.path.abspath(
+                image_dir = os.path.abspath(
+                    INSTAGRAM_IMAGE_DIR
+                )
+
+                current_dir = os.path.abspath(
                     root
-                ).startswith(
-                    os.path.abspath(
-                        INSTAGRAM_IMAGE_DIR
+                )
+
+
+                if (
+                    current_dir == image_dir
+                    or current_dir.startswith(
+                        image_dir + os.sep
                     )
                 ):
 
@@ -668,277 +578,54 @@ def compile_knowledge_base():
 
 
 # ============================================================
-# CREATE REEL
+# POST IMAGE
 # ============================================================
 
-def create_reel_video(
-    target_images
-):
-
-    print()
-    print(
-        "🎬 Creating Instagram Reel..."
-    )
-
-
-    for image in target_images:
-
-        print(
-            f"   📷 "
-            f"{os.path.basename(image)}"
-        )
-
-
-    clips = []
-
-    video = None
-
-
-    try:
-
-        # ----------------------------------------------------
-        # Create image clips
-        # ----------------------------------------------------
-
-        for image_path in target_images:
-
-            clip = (
-                ImageClip(
-                    image_path
-                )
-                .with_duration(3)
-            )
-
-            clips.append(
-                clip
-            )
-
-
-        # ----------------------------------------------------
-        # Combine clips
-        # ----------------------------------------------------
-
-        video = concatenate_videoclips(
-            clips,
-            method="compose"
-        )
-
-
-        # ----------------------------------------------------
-        # Export video
-        # ----------------------------------------------------
-
-        video.write_videofile(
-            OUTPUT_VIDEO,
-            fps=24,
-            codec="libx264",
-            audio=False,
-            logger=None
-        )
-
-
-        print()
-        print(
-            "✅ Reel created:"
-        )
-
-        print(
-            OUTPUT_VIDEO
-        )
-
-
-        return True
-
-
-    except Exception as e:
-
-        print()
-        print(
-            f"❌ Video creation failed: {e}"
-        )
-
-        traceback.print_exc()
-
-        return False
-
-
-    finally:
-
-        try:
-
-            if video:
-
-                video.close()
-
-        except Exception:
-
-            pass
-
-
-        for clip in clips:
-
-            try:
-
-                clip.close()
-
-            except Exception:
-
-                pass
-
-
-# ============================================================
-# GET INSTAGRAM MUSIC
-# ============================================================
-
-def get_music_track(
-    cl
-):
-
-    if not INSTAGRAM_TRACK_ID:
-
-        print(
-            "⚠️ INSTAGRAM_TRACK_ID is not configured."
-        )
-
-        print(
-            "ℹ️ Reel will be uploaded without music."
-        )
-
-        return None
-
-
-    try:
-
-        print()
-        print(
-            "🎵 Fetching Instagram track:"
-        )
-
-        print(
-            TARGET_SONG_NAME
-        )
-
-
-        track = cl.track_info_by_id(
-            INSTAGRAM_TRACK_ID
-        )
-
-
-        print(
-            "✅ Instagram music track loaded."
-        )
-
-
-        return track
-
-
-    except Exception as e:
-
-        print(
-            f"⚠️ Could not load "
-            f"Instagram music: {e}"
-        )
-
-        return None
-
-
-# ============================================================
-# UPLOAD REEL
-# ============================================================
-
-def upload_reel(
-    cl
+def post_image(
+    cl,
+    image_path
 ):
 
     if not os.path.exists(
-        OUTPUT_VIDEO
+        image_path
     ):
 
         return (
-            "Error: Generated video "
-            "does not exist."
+            "Error: Image file does not exist."
         )
-
-
-    track = get_music_track(
-        cl
-    )
 
 
     try:
 
         print()
         print(
-            "🚀 Uploading Reel..."
+            "📸 Posting image to Instagram..."
+        )
+
+        print(
+            f"   {image_path}"
         )
 
 
-        # ====================================================
-        # TRY MUSIC
-        # ====================================================
-
-        if track:
-
-            try:
-
-                cl.clip_upload_with_music(
-                    path=OUTPUT_VIDEO,
-                    caption=DEFAULT_CAPTION,
-                    track=track
-                )
-
-
-                print()
-                print(
-                    "🎉 SUCCESS! "
-                    "Reel posted with music."
-                )
-
-
-                return (
-                    "Success: Reel generated "
-                    "and posted with "
-                    "Instagram music."
-                )
-
-
-            except Exception as music_error:
-
-                print()
-                print(
-                    "⚠️ Music upload failed:"
-                )
-
-                print(
-                    str(music_error)
-                )
-
-                print(
-                    "🔄 Trying normal Reel upload..."
-                )
-
-
-        # ====================================================
-        # NORMAL REEL UPLOAD
-        # ====================================================
-
-        cl.clip_upload(
-            path=OUTPUT_VIDEO,
+        media = cl.photo_upload(
+            path=image_path,
             caption=DEFAULT_CAPTION
         )
 
 
         print()
         print(
-            "🎉 SUCCESS! "
-            "Reel posted without music."
+            "🎉 IMAGE POSTED SUCCESSFULLY!"
+        )
+
+
+        print(
+            f"Media ID: {media.id}"
         )
 
 
         return (
-            "Success: Reel generated "
-            "and posted without "
-            "Instagram music."
+            "Success: Image posted successfully."
         )
 
 
@@ -946,22 +633,26 @@ def upload_reel(
 
         print()
         print(
-            f"❌ Reel upload failed: {e}"
+            "❌ Image posting failed:"
+        )
+
+        print(
+            str(e)
         )
 
         traceback.print_exc()
 
 
         return (
-            f"Error: Reel upload failed: {e}"
+            f"Error: Image posting failed: {e}"
         )
 
 
 # ============================================================
-# PROCESS IMAGES
+# PROCESS NEXT IMAGE
 # ============================================================
 
-def process_and_post_slideshow(
+def process_and_post_image(
     cl
 ):
 
@@ -976,14 +667,10 @@ def process_and_post_slideshow(
     )
 
 
-    # ========================================================
-    # CHECK CONTENT QUEUE
-    # ========================================================
-
     if not INSTAGRAM_IMAGE_DIR:
 
         return (
-            "Error: Instagram Content_queue "
+            "Error: Instagram/Content_queue "
             "was not found."
         )
 
@@ -993,24 +680,10 @@ def process_and_post_slideshow(
     ):
 
         return (
-            "Error: Instagram Content_queue "
+            "Error: Instagram/Content_queue "
             "directory does not exist."
         )
 
-
-    print()
-    print(
-        "📂 Reading images from:"
-    )
-
-    print(
-        INSTAGRAM_IMAGE_DIR
-    )
-
-
-    # ========================================================
-    # FIND IMAGES
-    # ========================================================
 
     all_images = []
 
@@ -1021,23 +694,26 @@ def process_and_post_slideshow(
         )
     ):
 
-        if filename.lower().endswith(
+        if not filename.lower().endswith(
             valid_exts
         ):
 
-            full_path = os.path.join(
-                INSTAGRAM_IMAGE_DIR,
-                filename
-            )
+            continue
 
 
-            if os.path.isfile(
+        full_path = os.path.join(
+            INSTAGRAM_IMAGE_DIR,
+            filename
+        )
+
+
+        if os.path.isfile(
+            full_path
+        ):
+
+            all_images.append(
                 full_path
-            ):
-
-                all_images.append(
-                    full_path
-                )
+            )
 
 
     print()
@@ -1049,14 +725,13 @@ def process_and_post_slideshow(
     if not all_images:
 
         return (
-            "Error: No valid images found "
-            "inside Instagram/Content_queue."
+            "Error: No valid images found."
         )
 
 
-    # ========================================================
-    # REMOVE POSTED IMAGES
-    # ========================================================
+    # --------------------------------------------------------
+    # Remove already posted images
+    # --------------------------------------------------------
 
     unposted_images = [
         image
@@ -1065,7 +740,6 @@ def process_and_post_slideshow(
     ]
 
 
-    print()
     print(
         f"📊 Previously posted: "
         f"{len(all_images) - len(unposted_images)}"
@@ -1077,15 +751,15 @@ def process_and_post_slideshow(
     )
 
 
-    # ========================================================
-    # RESET HISTORY WHEN NEEDED
-    # ========================================================
+    # --------------------------------------------------------
+    # Reset after everything has been posted
+    # --------------------------------------------------------
 
-    if len(unposted_images) < 3:
+    if not unposted_images:
 
         print()
         print(
-            "🔄 Fewer than 3 unposted images remain."
+            "🔄 All images have already been posted."
         )
 
         print(
@@ -1098,75 +772,46 @@ def process_and_post_slideshow(
         unposted_images = all_images
 
 
-    if len(unposted_images) < 3:
+    # --------------------------------------------------------
+    # Select next image
+    # --------------------------------------------------------
 
-        return (
-            "Error: At least 3 images are required "
-            "to create a Reel."
-        )
-
-
-    # ========================================================
-    # SELECT THREE IMAGES
-    # ========================================================
-
-    target_images = unposted_images[:3]
+    target_image = unposted_images[0]
 
 
     print()
     print(
-        "🎯 Selected images:"
+        "🎯 Selected image:"
+    )
+
+    print(
+        f"   {os.path.basename(target_image)}"
     )
 
 
-    for image in target_images:
+    # --------------------------------------------------------
+    # Post
+    # --------------------------------------------------------
 
-        print(
-            f"   - "
-            f"{os.path.basename(image)}"
-        )
-
-
-    # ========================================================
-    # CREATE VIDEO
-    # ========================================================
-
-    video_created = create_reel_video(
-        target_images
+    result = post_image(
+        cl,
+        target_image
     )
 
 
-    if not video_created:
+    # --------------------------------------------------------
+    # Save only after successful post
+    # --------------------------------------------------------
 
-        return (
-            "Error: Could not create Reel video."
-        )
-
-
-    # ========================================================
-    # UPLOAD
-    # ========================================================
-
-    upload_result = upload_reel(
-        cl
-    )
-
-
-    # ========================================================
-    # SAVE HISTORY ONLY AFTER SUCCESS
-    # ========================================================
-
-    if upload_result.startswith(
+    if result.startswith(
         "Success:"
     ):
 
-        for image in target_images:
+        if target_image not in history:
 
-            if image not in history:
-
-                history.append(
-                    image
-                )
+            history.append(
+                target_image
+            )
 
 
         save_history(
@@ -1174,44 +819,11 @@ def process_and_post_slideshow(
         )
 
 
-        print(
-            "✅ Posting history updated."
-        )
-
-
-    # ========================================================
-    # DELETE GENERATED VIDEO
-    # ========================================================
-
-    if os.path.exists(
-        OUTPUT_VIDEO
-    ):
-
-        try:
-
-            os.remove(
-                OUTPUT_VIDEO
-            )
-
-            print(
-                "🧹 Temporary generated "
-                "video removed."
-            )
-
-
-        except Exception as e:
-
-            print(
-                f"⚠️ Could not remove "
-                f"video: {e}"
-            )
-
-
-    return upload_result
+    return result
 
 
 # ============================================================
-# MONITOR COMMENTS
+# COMMENT MONITOR
 # ============================================================
 
 def monitor_and_reply_to_comments(
@@ -1222,7 +834,7 @@ def monitor_and_reply_to_comments(
 
         return (
             "Comment processor skipped: "
-            "Gemini API key missing."
+            "GEMINI_API_KEY is missing."
         )
 
 
@@ -1235,7 +847,7 @@ def monitor_and_reply_to_comments(
     try:
 
         # ----------------------------------------------------
-        # Get account ID
+        # Get account
         # ----------------------------------------------------
 
         user_id = cl.user_id_from_username(
@@ -1249,12 +861,17 @@ def monitor_and_reply_to_comments(
 
         user_medias = cl.user_medias(
             user_id,
-            amount=3
+            amount=5
+        )
+
+
+        print(
+            f"📱 Found {len(user_medias)} recent posts."
         )
 
 
         # ----------------------------------------------------
-        # Build knowledge base
+        # Knowledge base
         # ----------------------------------------------------
 
         knowledge_context = (
@@ -1266,25 +883,29 @@ def monitor_and_reply_to_comments(
 
             knowledge_context = (
                 "No specific internal company "
-                "notes are available. "
-                "Reply politely as a "
-                "helpful assistant."
+                "knowledge is available."
             )
 
 
-        # ====================================================
-        # PROCESS POSTS
-        # ====================================================
+        # ----------------------------------------------------
+        # Process posts
+        # ----------------------------------------------------
 
         for media in user_medias:
+
+            print()
+            print(
+                f"🔎 Checking comments "
+                f"for media {media.id}"
+            )
+
 
             try:
 
                 comments = cl.media_comments(
                     media.id,
-                    amount=10
+                    amount=20
                 )
-
 
             except Exception as e:
 
@@ -1296,17 +917,22 @@ def monitor_and_reply_to_comments(
                 continue
 
 
-            # =================================================
-            # PROCESS COMMENTS
-            # =================================================
+            # ------------------------------------------------
+            # Comments
+            # ------------------------------------------------
 
             for comment in comments:
 
                 try:
 
-                    # -----------------------------------------
+                    if not comment.text:
+
+                        continue
+
+
+                    # ----------------------------------------
                     # Ignore own comments
-                    # -----------------------------------------
+                    # ----------------------------------------
 
                     if (
                         comment.user.username.lower()
@@ -1318,8 +944,7 @@ def monitor_and_reply_to_comments(
 
                     print()
                     print(
-                        f"💬 Comment from "
-                        f"@{comment.user.username}:"
+                        f"💬 @{comment.user.username}:"
                     )
 
                     print(
@@ -1327,40 +952,46 @@ def monitor_and_reply_to_comments(
                     )
 
 
-                    # -----------------------------------------
+                    # ----------------------------------------
                     # Gemini prompt
-                    # -----------------------------------------
+                    # ----------------------------------------
 
                     ai_prompt = f"""
-You are the AI operations representative
-for the platform "{USERNAME}".
+You are the official AI assistant
+for {USERNAME}.
 
-Below is the internal project knowledge:
+You are answering comments on Instagram.
 
+INTERNAL KNOWLEDGE:
 {knowledge_context}
 
-A user @{comment.user.username}
-left this Instagram comment:
+INSTAGRAM COMMENT:
+@{comment.user.username} wrote:
 
 "{comment.text}"
 
-Write a short, natural and friendly reply.
+INSTRUCTIONS:
 
-Rules:
-
-1. Use only facts contained in the knowledge above.
-2. Do not invent prices, dates, locations, features,
-   promises or other information.
-3. If the knowledge does not contain an answer,
-   politely say that the team can provide more details.
-4. Do not sound robotic.
-5. Maximum 2 short sentences.
+1. Answer using ONLY the internal knowledge.
+2. Never invent facts.
+3. Never invent prices.
+4. Never invent dates.
+5. Never invent amenities.
+6. Never invent availability.
+7. Never make promises.
+8. If the answer is not in the knowledge,
+   politely say that the team can provide
+   more details.
+9. Be friendly and natural.
+10. Maximum 2 short sentences.
+11. Do not mention that you are an AI unless
+    the user specifically asks.
 """
 
 
-                    # -----------------------------------------
+                    # ----------------------------------------
                     # Gemini
-                    # -----------------------------------------
+                    # ----------------------------------------
 
                     response = (
                         ai_client
@@ -1372,21 +1003,29 @@ Rules:
                     )
 
 
-                    reply_text = (
-                        response.text.strip()
-                        if response.text
-                        else ""
-                    )
+                    reply_text = ""
+
+
+                    if response.text:
+
+                        reply_text = (
+                            response.text.strip()
+                        )
 
 
                     if not reply_text:
 
+                        print(
+                            "⚠️ Gemini returned "
+                            "an empty response."
+                        )
+
                         continue
 
 
-                    # -----------------------------------------
+                    # ----------------------------------------
                     # Reply
-                    # -----------------------------------------
+                    # ----------------------------------------
 
                     cl.comment_create(
                         media.id,
@@ -1397,8 +1036,7 @@ Rules:
 
                     print()
                     print(
-                        f"🚀 Replied to "
-                        f"@{comment.user.username}:"
+                        "🤖 Reply sent:"
                     )
 
                     print(
@@ -1417,6 +1055,8 @@ Rules:
                         str(comment_error)
                     )
 
+                    traceback.print_exc()
+
                     continue
 
 
@@ -1429,7 +1069,11 @@ Rules:
 
         print()
         print(
-            f"⚠️ Comment processor warning: {e}"
+            "⚠️ Comment processor failed:"
+        )
+
+        print(
+            str(e)
         )
 
         traceback.print_exc()
@@ -1441,13 +1085,12 @@ Rules:
 
 
 # ============================================================
-# ACTUAL AUTOMATION
+# AUTOMATION
 # ============================================================
 
 def run_automation_background():
 
     global automation_running
-    global automation_status
 
 
     try:
@@ -1455,33 +1098,27 @@ def run_automation_background():
         automation_status.update(
             {
                 "status": "running",
-                "message":
-                    "Automation is running.",
-                "started_at":
-                    datetime.utcnow().isoformat(),
-                "finished_at":
-                    None,
-                "posting_result":
-                    None,
-                "comment_reply_result":
-                    None,
-                "error":
-                    None
+                "message": "Automation is running.",
+                "started_at": now_iso(),
+                "finished_at": None,
+                "posting_result": None,
+                "comment_reply_result": None,
+                "error": None
             }
         )
 
 
         print()
         print(
-            "============================================"
+            "=============================================="
         )
 
         print(
-            "🏁 AUTONOMOUS ROUTINE STARTED"
+            "🏁 IMAGE INSTAGRAM AUTOMATION STARTED"
         )
 
         print(
-            "============================================"
+            "=============================================="
         )
 
 
@@ -1502,7 +1139,7 @@ def run_automation_background():
 
 
         # ====================================================
-        # INSTAGRAM CLIENT
+        # INSTAGRAM LOGIN
         # ====================================================
 
         if not SESSION_ID:
@@ -1512,13 +1149,13 @@ def run_automation_background():
             )
 
 
-        cl = Client()
-
-
         print()
         print(
             "🔐 Logging into Instagram..."
         )
+
+
+        cl = Client()
 
 
         cl.login_by_sessionid(
@@ -1537,11 +1174,11 @@ def run_automation_background():
 
 
         # ====================================================
-        # POST REEL
+        # POST IMAGE
         # ====================================================
 
-        posting_log = (
-            process_and_post_slideshow(
+        posting_result = (
+            process_and_post_image(
                 cl
             )
         )
@@ -1549,14 +1186,14 @@ def run_automation_background():
 
         automation_status[
             "posting_result"
-        ] = posting_log
+        ] = posting_result
 
 
         # ====================================================
         # COMMENTS
         # ====================================================
 
-        comment_log = (
+        comment_result = (
             monitor_and_reply_to_comments(
                 cl
             )
@@ -1565,7 +1202,7 @@ def run_automation_background():
 
         automation_status[
             "comment_reply_result"
-        ] = comment_log
+        ] = comment_result
 
 
         # ====================================================
@@ -1574,21 +1211,21 @@ def run_automation_background():
 
         automation_status.update(
             {
-                "status":
-                    "completed",
+                "status": "completed",
 
                 "message":
-                    "Automation completed successfully.",
+                    "Image posting and comment "
+                    "processing completed.",
 
                 "finished_at":
-                    datetime.utcnow().isoformat()
+                    now_iso()
             }
         )
 
 
         print()
         print(
-            "============================================"
+            "=============================================="
         )
 
         print(
@@ -1596,7 +1233,7 @@ def run_automation_background():
         )
 
         print(
-            "============================================"
+            "=============================================="
         )
 
 
@@ -1616,14 +1253,13 @@ def run_automation_background():
 
         automation_status.update(
             {
-                "status":
-                    "failed",
+                "status": "failed",
 
                 "message":
                     "Automation failed.",
 
                 "finished_at":
-                    datetime.utcnow().isoformat(),
+                    now_iso(),
 
                 "error":
                     str(e)
@@ -1634,6 +1270,7 @@ def run_automation_background():
     finally:
 
         automation_running = False
+
 
         try:
 
@@ -1655,10 +1292,20 @@ def home():
         {
             "system":
                 "Autonomous Obsidian-to-Instagram "
-                "Bridge Engine",
+                "Image Bridge Engine",
 
             "status":
                 "online",
+
+            "features":
+                {
+                    "google_drive_sync": True,
+                    "image_posting": True,
+                    "gemini_comments": True,
+                    "video_generation": False,
+                    "reels": False,
+                    "instagram_music_for_reels": True
+                },
 
             "automation":
                 automation_status
@@ -1667,7 +1314,7 @@ def home():
 
 
 # ============================================================
-# AUTOMATION STATUS
+# STATUS
 # ============================================================
 
 @app.route(
@@ -1719,12 +1366,11 @@ def trigger_automation():
 
         return jsonify(
             {
-                "status":
-                    "failed",
+                "status": "failed",
 
                 "error":
-                    "Missing required Render "
-                    "environment variables.",
+                    "Required Render environment "
+                    "variables are missing.",
 
                 "missing":
                     missing_variables
@@ -1733,7 +1379,7 @@ def trigger_automation():
 
 
     # ========================================================
-    # CHECK IF ALREADY RUNNING
+    # CHECK RUNNING
     # ========================================================
 
     if automation_running:
@@ -1753,7 +1399,7 @@ def trigger_automation():
 
 
     # ========================================================
-    # LOCK AUTOMATION
+    # LOCK
     # ========================================================
 
     acquired = automation_lock.acquire(
@@ -1782,7 +1428,7 @@ def trigger_automation():
 
 
     # ========================================================
-    # START BACKGROUND THREAD
+    # THREAD
     # ========================================================
 
     thread = threading.Thread(
@@ -1794,22 +1440,37 @@ def trigger_automation():
     thread.start()
 
 
-    # ========================================================
-    # RETURN IMMEDIATELY
-    # ========================================================
-
     return jsonify(
         {
             "status":
                 "started",
 
             "message":
-                "Automation started in the background.",
+                "Image automation started "
+                "in the background.",
 
             "check_status":
                 "/automation-status"
         }
     ), 202
+
+
+# ============================================================
+# HEALTH CHECK
+# ============================================================
+
+@app.route(
+    "/health",
+    methods=["GET"]
+)
+def health():
+
+    return jsonify(
+        {
+            "status": "healthy",
+            "service": "instagram-image-automation"
+        }
+    )
 
 
 # ============================================================
