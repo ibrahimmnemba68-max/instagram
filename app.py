@@ -25,7 +25,7 @@ USERNAME = "fluentdome"
 
 
 # ============================================================
-# GOOGLE DRIVE BRAIN
+# GOOGLE DRIVE
 # ============================================================
 
 BRAIN_FOLDER_URL = (
@@ -46,19 +46,23 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 # DIRECTORIES
 # ============================================================
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(
+    os.path.abspath(__file__)
+)
 
 DOWNLOAD_DIR = os.path.join(
     BASE_DIR,
     "drive_sync"
 )
 
-INSTAGRAM_IMAGE_DIR = None
-
 TRACKING_FILE = os.path.join(
     BASE_DIR,
     "posted_history.json"
 )
+
+
+# This will be discovered automatically.
+INSTAGRAM_IMAGE_DIR = None
 
 
 # ============================================================
@@ -93,7 +97,7 @@ DEFAULT_CAPTION = (
 
 
 # ============================================================
-# CREATE DIRECTORIES
+# CREATE DOWNLOAD DIRECTORY
 # ============================================================
 
 os.makedirs(
@@ -197,7 +201,7 @@ def save_history(history):
 
 
 # ============================================================
-# FIND INSTAGRAM CONTENT QUEUE
+# FIND CONTENT QUEUE
 # ============================================================
 
 def find_content_queue():
@@ -215,27 +219,34 @@ def find_content_queue():
 
         return None
 
-    possible_matches = []
 
-    for root, dirs, files in os.walk(DOWNLOAD_DIR):
+    matches = []
+
+
+    for root, dirs, files in os.walk(
+        DOWNLOAD_DIR
+    ):
 
         normalized_root = os.path.normpath(root)
 
         parts = normalized_root.split(os.sep)
+
 
         if len(parts) >= 2:
 
             parent_name = parts[-2].lower()
             current_name = parts[-1].lower()
 
+
             if (
                 parent_name == "instagram"
                 and current_name == "content_queue"
             ):
 
-                possible_matches.append(root)
+                matches.append(root)
 
-    if not possible_matches:
+
+    if not matches:
 
         print(
             "❌ Instagram/Content_queue was not found."
@@ -246,7 +257,10 @@ def find_content_queue():
             "📂 Downloaded directory structure:"
         )
 
-        for root, dirs, files in os.walk(DOWNLOAD_DIR):
+
+        for root, dirs, files in os.walk(
+            DOWNLOAD_DIR
+        ):
 
             level = root.replace(
                 DOWNLOAD_DIR,
@@ -260,44 +274,32 @@ def find_content_queue():
                 f"{os.path.basename(root) or root}"
             )
 
+
         return None
 
-    selected = possible_matches[0]
 
+    selected = matches[0]
+
+
+    print()
     print(
         "✅ Instagram/Content_queue found:"
     )
 
     print(selected)
 
-    if len(possible_matches) > 1:
-
-        print()
-        print(
-            "⚠️ Multiple Content_queue folders found:"
-        )
-
-        for match in possible_matches:
-
-            print(
-                f"   - {match}"
-            )
-
-        print()
-        print(
-            "Using the first matching folder."
-        )
 
     return selected
 
 
 # ============================================================
-# GOOGLE DRIVE SYNC
+# GOOGLE DRIVE SYNCHRONIZATION
 # ============================================================
 
 def sync_google_drive():
 
     global INSTAGRAM_IMAGE_DIR
+
 
     print()
     print(
@@ -312,9 +314,6 @@ def sync_google_drive():
         "================================================"
     )
 
-    print()
-    print("📁 Drive folder:")
-    print(BRAIN_FOLDER_URL)
 
     try:
 
@@ -323,10 +322,22 @@ def sync_google_drive():
             exist_ok=True
         )
 
+
+        print()
+        print(
+            "📁 Google Drive folder:"
+        )
+
+        print(
+            BRAIN_FOLDER_URL
+        )
+
+
         print()
         print(
             "⬇️ Downloading Google Drive folder..."
         )
+
 
         gdown.download_folder(
             url=BRAIN_FOLDER_URL,
@@ -335,23 +346,22 @@ def sync_google_drive():
             remaining_ok=True
         )
 
+
         print()
         print(
-            "📦 Google Drive download process finished."
+            "✅ Google Drive download finished."
         )
+
 
         INSTAGRAM_IMAGE_DIR = (
             find_content_queue()
         )
 
+
         if not INSTAGRAM_IMAGE_DIR:
 
-            print()
-            print(
-                "❌ Could not locate Instagram/Content_queue."
-            )
-
             return False
+
 
         image_extensions = (
             ".jpg",
@@ -360,7 +370,9 @@ def sync_google_drive():
             ".webp"
         )
 
+
         images = []
+
 
         for filename in os.listdir(
             INSTAGRAM_IMAGE_DIR
@@ -375,19 +387,23 @@ def sync_google_drive():
                     filename
                 )
 
+
                 if os.path.isfile(full_path):
 
                     images.append(full_path)
 
+
         images.sort(
-            key=lambda x: os.path.basename(x).lower()
+            key=lambda x:
+            os.path.basename(x).lower()
         )
+
 
         print()
         print(
-            f"📸 Content_queue contains "
-            f"{len(images)} images."
+            f"📸 Found {len(images)} images."
         )
+
 
         for image in images:
 
@@ -396,28 +412,25 @@ def sync_google_drive():
                 f"{os.path.basename(image)}"
             )
 
+
         if not images:
 
             print()
             print(
-                "❌ No images found."
+                "❌ No images found in Content_queue."
             )
 
             return False
+
 
         print()
         print(
             "✅ Google Drive synchronization successful."
         )
 
-        print()
-        print(
-            "📂 Using image directory:"
-        )
-
-        print(INSTAGRAM_IMAGE_DIR)
 
         return True
+
 
     except Exception as e:
 
@@ -434,39 +447,42 @@ def sync_google_drive():
 
 
 # ============================================================
-# KNOWLEDGE BASE
+# COMPILE KNOWLEDGE BASE
 # ============================================================
 
 def compile_knowledge_base():
 
     context_data = ""
 
+
     if not os.path.exists(DOWNLOAD_DIR):
 
         return context_data
+
 
     for root, dirs, files in os.walk(
         DOWNLOAD_DIR
     ):
 
-        # ----------------------------------------------------
-        # Skip Instagram image folder
-        # ----------------------------------------------------
-
+        # Don't read image directory
         if INSTAGRAM_IMAGE_DIR:
 
             try:
 
-                image_folder = os.path.abspath(
+                image_dir = os.path.abspath(
                     INSTAGRAM_IMAGE_DIR
                 )
 
-                current_folder = os.path.abspath(
+                current_root = os.path.abspath(
                     root
                 )
 
-                if current_folder.startswith(
-                    image_folder
+
+                if (
+                    current_root == image_dir
+                    or current_root.startswith(
+                        image_dir + os.sep
+                    )
                 ):
 
                     continue
@@ -475,21 +491,21 @@ def compile_knowledge_base():
 
                 pass
 
+
         for file in files:
 
             if not file.lower().endswith(
-                (
-                    ".txt",
-                    ".md"
-                )
+                (".txt", ".md")
             ):
 
                 continue
+
 
             file_path = os.path.join(
                 root,
                 file
             )
+
 
             try:
 
@@ -501,124 +517,62 @@ def compile_knowledge_base():
 
                     content = f.read()
 
+
                 context_data += (
                     "\n"
                     f"--- Source File: {file} ---\n"
                     f"{content}\n"
                 )
 
+
             except Exception as e:
 
                 print(
-                    f"⚠️ Could not read "
-                    f"{file}: {e}"
+                    f"⚠️ Could not read {file}: {e}"
                 )
+
 
     return context_data
 
 
 # ============================================================
-# POST IMAGE TO INSTAGRAM
+# GET NEXT IMAGE
 # ============================================================
 
-def upload_image(
-    cl,
-    image_path
-):
+def get_next_image():
 
-    if not os.path.exists(image_path):
+    if not INSTAGRAM_IMAGE_DIR:
 
-        return (
-            "Error: Image file does not exist."
-        )
-
-    try:
-
-        print()
-        print(
-            "📸 Uploading image to Instagram..."
-        )
-
-        print(
-            f"   {image_path}"
-        )
-
-        cl.photo_upload(
-            path=image_path,
-            caption=DEFAULT_CAPTION
-        )
-
-        print()
-        print(
-            "🎉 SUCCESS! Image posted to Instagram."
-        )
-
-        return (
-            "Success: Image posted to Instagram."
-        )
-
-    except Exception as e:
-
-        print()
-        print(
-            f"❌ Image upload failed: {e}"
-        )
-
-        traceback.print_exc()
-
-        return (
-            f"Error: Image upload failed: {e}"
-        )
+        return None
 
 
-# ============================================================
-# PROCESS AND POST NEXT IMAGE
-# ============================================================
+    if not os.path.isdir(
+        INSTAGRAM_IMAGE_DIR
+    ):
 
-def process_and_post_image(cl):
+        return None
 
-    history = load_history()
 
-    valid_exts = (
+    valid_extensions = (
         ".jpg",
         ".jpeg",
         ".png",
         ".webp"
     )
 
-    if not INSTAGRAM_IMAGE_DIR:
 
-        return (
-            "Error: Instagram Content_queue "
-            "was not found."
-        )
+    history = load_history()
 
-    if not os.path.isdir(
-        INSTAGRAM_IMAGE_DIR
-    ):
-
-        return (
-            "Error: Instagram Content_queue "
-            "directory does not exist."
-        )
-
-    print()
-    print(
-        "📂 Reading images from:"
-    )
-
-    print(INSTAGRAM_IMAGE_DIR)
 
     all_images = []
 
-    for filename in sorted(
-        os.listdir(
-            INSTAGRAM_IMAGE_DIR
-        )
+
+    for filename in os.listdir(
+        INSTAGRAM_IMAGE_DIR
     ):
 
         if filename.lower().endswith(
-            valid_exts
+            valid_extensions
         ):
 
             full_path = os.path.join(
@@ -626,73 +580,171 @@ def process_and_post_image(cl):
                 filename
             )
 
+
             if os.path.isfile(full_path):
 
                 all_images.append(full_path)
 
-    print()
-    print(
-        f"📸 Found {len(all_images)} images."
+
+    all_images.sort(
+        key=lambda x:
+        os.path.basename(x).lower()
     )
+
 
     if not all_images:
 
-        return (
-            "Error: No valid images found "
-            "inside Instagram/Content_queue."
-        )
+        return None
+
 
     # --------------------------------------------------------
-    # Remove previously posted images
+    # Find an image that has not been posted
     # --------------------------------------------------------
 
-    unposted_images = [
-        image
-        for image in all_images
-        if image not in history
-    ]
+    for image in all_images:
+
+        if image not in history:
+
+            return image
+
+
+    # --------------------------------------------------------
+    # All images have already been posted.
+    #
+    # Reset history so the queue can start again.
+    # --------------------------------------------------------
 
     print()
     print(
-        f"📊 Previously posted: "
-        f"{len(all_images) - len(unposted_images)}"
+        "🔄 All images have already been posted."
     )
 
     print(
-        f"📊 Remaining: "
-        f"{len(unposted_images)}"
+        "🔄 Resetting posting history."
     )
 
-    # --------------------------------------------------------
-    # Reset when all images have been posted
-    # --------------------------------------------------------
 
-    if not unposted_images:
+    history = []
+
+    save_history(history)
+
+
+    return all_images[0]
+
+
+# ============================================================
+# POST IMAGE
+# ============================================================
+
+def post_image(cl, image_path):
+
+    if not image_path:
+
+        return (
+            "Error: No image was selected."
+        )
+
+
+    if not os.path.exists(image_path):
+
+        return (
+            "Error: Image file does not exist."
+        )
+
+
+    filename = os.path.basename(
+        image_path
+    )
+
+
+    print()
+    print(
+        "📸 Posting image:"
+    )
+
+    print(filename)
+
+
+    try:
+
+        media = cl.photo_upload(
+            path=image_path,
+            caption=DEFAULT_CAPTION
+        )
+
 
         print()
         print(
-            "🔄 All images have already been posted."
+            "🎉 IMAGE POSTED SUCCESSFULLY!"
         )
+
 
         print(
-            "🔄 Resetting posting history."
+            f"Media ID: {media.id}"
         )
 
-        history = []
-
-        unposted_images = all_images
-
-    if not unposted_images:
 
         return (
-            "Error: No images available."
+            f"Success: Image '{filename}' "
+            "posted successfully."
         )
 
-    # --------------------------------------------------------
-    # Select ONE image
-    # --------------------------------------------------------
 
-    target_image = unposted_images[0]
+    except Exception as e:
+
+        print()
+        print(
+            "❌ Image posting failed:"
+        )
+
+        print(str(e))
+
+        traceback.print_exc()
+
+
+        return (
+            f"Error: Image posting failed: {e}"
+        )
+
+
+# ============================================================
+# PROCESS IMAGE POST
+# ============================================================
+
+def process_and_post_image(cl):
+
+    print()
+    print(
+        "================================================"
+    )
+
+    print(
+        "📸 STARTING IMAGE POSTING"
+    )
+
+    print(
+        "================================================"
+    )
+
+
+    if not INSTAGRAM_IMAGE_DIR:
+
+        return (
+            "Error: Instagram/Content_queue "
+            "was not found."
+        )
+
+
+    image_path = get_next_image()
+
+
+    if not image_path:
+
+        return (
+            "Error: No images found "
+            "inside Instagram/Content_queue."
+        )
+
 
     print()
     print(
@@ -700,44 +752,46 @@ def process_and_post_image(cl):
     )
 
     print(
-        f"   {os.path.basename(target_image)}"
+        os.path.basename(image_path)
     )
 
-    # --------------------------------------------------------
-    # Upload
-    # --------------------------------------------------------
 
-    upload_result = upload_image(
+    result = post_image(
         cl,
-        target_image
+        image_path
     )
 
+
     # --------------------------------------------------------
-    # Save history ONLY after successful upload
+    # Save image to history ONLY after successful posting
     # --------------------------------------------------------
 
-    if upload_result.startswith(
-        "Success:"
-    ):
+    if result.startswith("Success:"):
 
-        if target_image not in history:
+        history = load_history()
+
+
+        if image_path not in history:
 
             history.append(
-                target_image
+                image_path
             )
+
 
         save_history(history)
 
+
         print()
         print(
-            "✅ Image posting history updated."
+            "✅ Image added to posting history."
         )
 
-    return upload_result
+
+    return result
 
 
 # ============================================================
-# MONITOR COMMENTS AND REPLY USING GEMINI
+# MONITOR COMMENTS
 # ============================================================
 
 def monitor_and_reply_to_comments(cl):
@@ -746,13 +800,23 @@ def monitor_and_reply_to_comments(cl):
 
         return (
             "Comment processor skipped: "
-            "Gemini API key missing."
+            "GEMINI_API_KEY is missing."
         )
+
 
     print()
     print(
-        "💬 Scanning recent Instagram posts..."
+        "================================================"
     )
+
+    print(
+        "💬 CHECKING INSTAGRAM COMMENTS"
+    )
+
+    print(
+        "================================================"
+    )
+
 
     try:
 
@@ -764,122 +828,158 @@ def monitor_and_reply_to_comments(cl):
             USERNAME
         )
 
+
         # ----------------------------------------------------
         # Get recent posts
         # ----------------------------------------------------
 
-        user_medias = cl.user_medias(
+        medias = cl.user_medias(
             user_id,
             amount=3
         )
 
+
+        print()
+        print(
+            f"📱 Checking {len(medias)} recent posts."
+        )
+
+
         # ----------------------------------------------------
-        # Build knowledge base
+        # Knowledge base
         # ----------------------------------------------------
 
         knowledge_context = (
             compile_knowledge_base()
         )
 
+
         if not knowledge_context:
 
             knowledge_context = (
-                "No specific internal company "
-                "notes are available. "
-                "Reply politely as a helpful "
-                "assistant without inventing facts."
+                "No specific internal project "
+                "knowledge is currently available."
             )
 
-        # ----------------------------------------------------
-        # Process recent posts
-        # ----------------------------------------------------
 
-        for media in user_medias:
+        reply_count = 0
+
+
+        # ====================================================
+        # POSTS
+        # ====================================================
+
+        for media in medias:
 
             try:
 
                 comments = cl.media_comments(
                     media.id,
-                    amount=10
+                    amount=20
                 )
+
 
             except Exception as e:
 
+                print()
                 print(
                     f"⚠️ Could not read comments "
-                    f"for {media.id}: {e}"
+                    f"for media {media.id}: {e}"
                 )
 
                 continue
 
-            # ------------------------------------------------
-            # Process comments
-            # ------------------------------------------------
+
+            # =================================================
+            # COMMENTS
+            # =================================================
 
             for comment in comments:
 
                 try:
 
-                    # ----------------------------------------
-                    # Ignore own comments
-                    # ----------------------------------------
+                    # -----------------------------------------
+                    # Ignore our own comments
+                    # -----------------------------------------
 
-                    if (
-                        comment.user.username.lower()
-                        == USERNAME.lower()
-                    ):
+                    if not comment.user:
 
                         continue
 
+
+                    commenter = (
+                        comment.user.username
+                    )
+
+
+                    if commenter.lower() == USERNAME.lower():
+
+                        continue
+
+
+                    comment_text = (
+                        comment.text or ""
+                    ).strip()
+
+
+                    if not comment_text:
+
+                        continue
+
+
                     print()
                     print(
-                        f"💬 Comment from "
-                        f"@{comment.user.username}:"
+                        f"💬 @{commenter}:"
                     )
 
                     print(
-                        comment.text
+                        comment_text
                     )
 
-                    # ----------------------------------------
-                    # Gemini prompt
-                    # ----------------------------------------
+
+                    # -----------------------------------------
+                    # AI PROMPT
+                    # -----------------------------------------
 
                     ai_prompt = f"""
-You are the AI customer-support representative
-for "{USERNAME}".
+You are the official AI assistant for
+{USERNAME}.
 
-You are replying to a comment on Instagram.
+You help answer Instagram comments about
+the project.
 
-Below is the internal company knowledge:
+INTERNAL PROJECT KNOWLEDGE:
 
 {knowledge_context}
 
-Instagram user:
-@{comment.user.username}
+INSTAGRAM COMMENT:
 
-Their comment:
-"{comment.text}"
+@{commenter} wrote:
+
+"{comment_text}"
 
 Write a short, natural and friendly reply.
 
 Rules:
 
-1. Use ONLY facts contained in the knowledge above.
-2. Do NOT invent prices, dates, locations, features,
-   availability, promises or other information.
-3. If the knowledge does not contain the answer,
-   politely tell the user that the team can provide
-   more details.
-4. Be helpful and conversational.
-5. Do not sound robotic.
-6. Maximum 2 short sentences.
-7. Do not use hashtags unless they are necessary.
+1. Use ONLY information contained in the internal
+   project knowledge.
+2. Never invent prices.
+3. Never invent dates.
+4. Never invent locations.
+5. Never invent services or features.
+6. Never make promises that are not in the knowledge.
+7. If the information is not available, politely say
+   that the team can provide more details.
+8. Keep the reply conversational.
+9. Maximum 2 short sentences.
+10. Do not mention that you are reading a knowledge base.
 """
 
-                    # ----------------------------------------
-                    # Generate Gemini response
-                    # ----------------------------------------
+
+                    # -----------------------------------------
+                    # Gemini
+                    # -----------------------------------------
 
                     response = (
                         ai_client
@@ -890,23 +990,26 @@ Rules:
                         )
                     )
 
+
                     reply_text = (
                         response.text.strip()
                         if response.text
                         else ""
                     )
 
+
                     if not reply_text:
 
                         print(
-                            "⚠️ Gemini returned empty response."
+                            "⚠️ Gemini returned an empty reply."
                         )
 
                         continue
 
-                    # ----------------------------------------
+
+                    # -----------------------------------------
                     # Reply to comment
-                    # ----------------------------------------
+                    # -----------------------------------------
 
                     cl.comment_create(
                         media.id,
@@ -914,15 +1017,19 @@ Rules:
                         replied_to_comment_id=comment.id
                     )
 
+
+                    reply_count += 1
+
+
                     print()
                     print(
-                        f"🚀 Replied to "
-                        f"@{comment.user.username}:"
+                        f"🤖 Replied to @{commenter}:"
                     )
 
                     print(
                         reply_text
                     )
+
 
                 except Exception as comment_error:
 
@@ -935,20 +1042,28 @@ Rules:
                         str(comment_error)
                     )
 
+                    traceback.print_exc()
+
                     continue
 
+
         return (
-            "Comment checks processed completely."
+            "Comment checks completed. "
+            f"Replies sent: {reply_count}."
         )
+
 
     except Exception as e:
 
         print()
         print(
-            f"⚠️ Comment processor warning: {e}"
+            "⚠️ Comment processor failed:"
         )
 
+        print(str(e))
+
         traceback.print_exc()
+
 
         return (
             f"Comment processor warning: {e}"
@@ -956,63 +1071,46 @@ Rules:
 
 
 # ============================================================
-# ACTUAL AUTOMATION
+# BACKGROUND AUTOMATION
 # ============================================================
 
 def run_automation_background():
 
     global automation_running
-    global automation_status
+
 
     try:
 
         automation_status.update(
             {
                 "status": "running",
-                "message":
-                    "Automation is running.",
+                "message": "Automation is running.",
                 "started_at":
                     datetime.utcnow().isoformat(),
-                "finished_at":
-                    None,
-                "posting_result":
-                    None,
-                "comment_reply_result":
-                    None,
-                "error":
-                    None
+                "finished_at": None,
+                "posting_result": None,
+                "comment_reply_result": None,
+                "error": None
             }
         )
 
+
         print()
         print(
-            "============================================"
+            "================================================"
         )
 
         print(
-            "🏁 AUTONOMOUS ROUTINE STARTED"
+            "🏁 AUTOMATION STARTED"
         )
 
         print(
-            "============================================"
+            "================================================"
         )
 
-        # ====================================================
-        # GOOGLE DRIVE
-        # ====================================================
-
-        drive_synced = (
-            sync_google_drive()
-        )
-
-        if not drive_synced:
-
-            raise RuntimeError(
-                "Google Drive synchronization failed."
-            )
 
         # ====================================================
-        # INSTAGRAM SESSION
+        # CHECK INSTAGRAM SESSION
         # ====================================================
 
         if not SESSION_ID:
@@ -1021,61 +1119,124 @@ def run_automation_background():
                 "INSTAGRAM_SESSION_ID is missing."
             )
 
-        cl = Client()
+
+        # ====================================================
+        # CHECK GEMINI
+        # ====================================================
+
+        if not GEMINI_API_KEY:
+
+            raise RuntimeError(
+                "GEMINI_API_KEY is missing."
+            )
+
+
+        # ====================================================
+        # GOOGLE DRIVE
+        # ====================================================
+
+        automation_status[
+            "message"
+        ] = "Synchronizing Google Drive."
+
+
+        drive_synced = (
+            sync_google_drive()
+        )
+
+
+        if not drive_synced:
+
+            raise RuntimeError(
+                "Google Drive synchronization failed."
+            )
+
+
+        # ====================================================
+        # INSTAGRAM CLIENT
+        # ====================================================
+
+        automation_status[
+            "message"
+        ] = "Logging into Instagram."
+
 
         print()
         print(
             "🔐 Logging into Instagram..."
         )
 
+
+        cl = Client()
+
+
         cl.login_by_sessionid(
             SESSION_ID
         )
+
+
+        # Verify account
 
         cl.user_id_from_username(
             USERNAME
         )
 
+
+        print()
         print(
             "✅ Instagram authentication successful."
         )
+
 
         # ====================================================
         # POST IMAGE
         # ====================================================
 
-        posting_log = (
+        automation_status[
+            "message"
+        ] = "Posting image."
+
+
+        posting_result = (
             process_and_post_image(
                 cl
             )
         )
 
+
         automation_status[
             "posting_result"
-        ] = posting_log
+        ] = posting_result
+
 
         # ====================================================
         # COMMENTS
         # ====================================================
 
-        comment_log = (
+        automation_status[
+            "message"
+        ] = "Checking Instagram comments."
+
+
+        comment_result = (
             monitor_and_reply_to_comments(
                 cl
             )
         )
 
+
         automation_status[
             "comment_reply_result"
-        ] = comment_log
+        ] = comment_result
+
 
         # ====================================================
-        # COMPLETE
+        # FINISHED
         # ====================================================
 
         automation_status.update(
             {
-                "status":
-                    "completed",
+                "status": "completed",
 
                 "message":
                     "Automation completed successfully.",
@@ -1085,9 +1246,10 @@ def run_automation_background():
             }
         )
 
+
         print()
         print(
-            "============================================"
+            "================================================"
         )
 
         print(
@@ -1095,12 +1257,17 @@ def run_automation_background():
         )
 
         print(
-            "============================================"
+            "================================================"
         )
+
 
     except Exception as e:
 
         print()
+        print(
+            "================================================"
+        )
+
         print(
             "❌ AUTOMATION FAILED"
         )
@@ -1109,12 +1276,17 @@ def run_automation_background():
             str(e)
         )
 
+        print(
+            "================================================"
+        )
+
+
         traceback.print_exc()
+
 
         automation_status.update(
             {
-                "status":
-                    "failed",
+                "status": "failed",
 
                 "message":
                     "Automation failed.",
@@ -1127,9 +1299,11 @@ def run_automation_background():
             }
         )
 
+
     finally:
 
         automation_running = False
+
 
         try:
 
@@ -1158,23 +1332,12 @@ def home():
 
             "features":
                 {
-                    "google_drive_sync":
-                        True,
-
-                    "image_posting":
-                        True,
-
-                    "gemini_comments":
-                        True,
-
-                    "video_generation":
-                        False,
-
-                    "reels":
-                        False,
-
-                    "instagram_music":
-                        False
+                    "google_drive_sync": True,
+                    "image_posting": True,
+                    "reels": False,
+                    "video_generation": False,
+                    "instagram_music": False,
+                    "gemini_comments": True
                 },
 
             "automation":
@@ -1199,7 +1362,7 @@ def get_automation_status():
 
 
 # ============================================================
-# START AUTOMATION
+# RUN AUTOMATION
 # ============================================================
 
 @app.route(
@@ -1210,11 +1373,13 @@ def trigger_automation():
 
     global automation_running
 
+
     # ========================================================
-    # CHECK ENVIRONMENT
+    # CHECK ENVIRONMENT VARIABLES
     # ========================================================
 
     missing_variables = []
+
 
     if not SESSION_ID:
 
@@ -1222,30 +1387,32 @@ def trigger_automation():
             "INSTAGRAM_SESSION_ID"
         )
 
+
     if not GEMINI_API_KEY:
 
         missing_variables.append(
             "GEMINI_API_KEY"
         )
 
+
     if missing_variables:
 
         return jsonify(
             {
-                "status":
-                    "failed",
+                "status": "failed",
 
                 "error":
-                    "Missing required Render "
-                    "environment variables.",
+                    "Required Render environment "
+                    "variables are missing.",
 
                 "missing":
                     missing_variables
             }
         ), 500
 
+
     # ========================================================
-    # CHECK IF ALREADY RUNNING
+    # CHECK CURRENT RUN
     # ========================================================
 
     if automation_running:
@@ -1263,13 +1430,15 @@ def trigger_automation():
             }
         ), 202
 
+
     # ========================================================
-    # LOCK AUTOMATION
+    # ACQUIRE LOCK
     # ========================================================
 
     acquired = automation_lock.acquire(
         blocking=False
     )
+
 
     if not acquired:
 
@@ -1287,7 +1456,9 @@ def trigger_automation():
             }
         ), 202
 
+
     automation_running = True
+
 
     # ========================================================
     # START BACKGROUND THREAD
@@ -1298,7 +1469,9 @@ def trigger_automation():
         daemon=True
     )
 
+
     thread.start()
+
 
     # ========================================================
     # RETURN IMMEDIATELY
@@ -1330,6 +1503,7 @@ if __name__ == "__main__":
             5000
         )
     )
+
 
     app.run(
         host="0.0.0.0",
